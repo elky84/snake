@@ -1,60 +1,76 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using static System.Console;
 
 namespace Snake
 {
-    class Program
+    public class Program
     {
-        static void Main ()
-        {
-            var rand = new Random ();
+        private static readonly Random Rand = new Random();
 
+        public static void Main()
+        {
             var score = 5;
 
-            var head = new Pixel (WindowWidth / 2, WindowHeight / 2, ConsoleColor.Red);
-            var berry = new Pixel (toEvenNumber(rand.Next (1, WindowWidth - 2)), rand.Next (1, WindowHeight - 2),     ConsoleColor.Cyan);
+            var head = new Pixel(WindowWidth / 2, WindowHeight / 2, ConsoleColor.Red);
+            var body = new List<Pixel>();
 
-            var body = new List<Pixel> ();
+            var berry = GetBerryPos(head, body);
 
             var currentMovement = Direction.Right;
 
-            var gameover = false;
+            var gameOver = false;
 
+            CursorVisible = false;
 
-            DrawBorder ();
+            DrawBorder();
             while (true)
             {
-                gameover |= (head.XPos == WindowWidth - 1 || head.XPos == 0 || head.YPos == WindowHeight - 1 || head.YPos == 0);
+                gameOver |= (head.XPos == WindowWidth - 1 || head.XPos == 0 || head.YPos == WindowHeight - 1 || head.YPos == 0);
 
                 if (berry.XPos == head.XPos && berry.YPos == head.YPos)
                 {
                     score++;
-                    berry = new Pixel (toEvenNumber(rand.Next (1, WindowWidth - 2)), rand.Next (1, WindowHeight -     2), ConsoleColor.Cyan);
+                    berry = GetBerryPos(head, body);
                 }
 
-                for (int i = 0; i < body.Count; i++)
+                foreach (var pixel in body)
                 {
-                    DrawPixel (body[i]);
-                    gameover |= (body[i].XPos == head.XPos && body[i].YPos == head.YPos);
+                    DrawPixel(pixel);
+                    gameOver |= (pixel.XPos == head.XPos && pixel.YPos == head.YPos);
                 }
 
-                if (gameover)
+                if (gameOver)
                 {
                     break;
                 }
 
-                DrawPixel (head);
-                DrawPixel (berry);
+                DrawPixel(head);
+                DrawPixel(berry);
 
                 var sw = Stopwatch.StartNew();
                 while (sw.ElapsedMilliseconds <= 500)
                 {
-                    currentMovement = ReadMovement (currentMovement);
+                    var oldMovement = currentMovement;
+                    bool pressed;
+
+                    (currentMovement, pressed) = ReadMovement(currentMovement);
+
+                    if (currentMovement == oldMovement && !pressed)
+                    {
+                        continue;
+                    }
+
+                    if (currentMovement == Direction.Quit)
+                    {
+                        gameOver = true;
+                    }
+                    break;
                 }
 
-                body.Add (new Pixel (head.XPos, head.YPos, ConsoleColor.Green));
+                body.Add(new Pixel(head.XPos, head.YPos, ConsoleColor.Green));
 
                 switch (currentMovement)
                 {
@@ -65,96 +81,113 @@ namespace Snake
                         head.YPos++;
                         break;
                     case Direction.Left:
-                        head.XPos-=2;
+                        head.XPos -= 2;
                         break;
                     case Direction.Right:
-                        head.XPos+=2;
+                        head.XPos += 2;
                         break;
                 }
 
                 if (body.Count > score)
                 {
                     RemovePixel(body[0]);
-                    body.RemoveAt (0);
+                    body.RemoveAt(0);
                 }
             }
-            SetCursorPosition (WindowWidth / 5, WindowHeight / 2);
-            WriteLine ($"Game over, Score: {score - 5}");
-            SetCursorPosition (WindowWidth / 5, WindowHeight / 2 + 1);
-            ReadKey ();
+            SetCursorPosition(WindowWidth / 5, WindowHeight / 2);
+            WriteLine($"Game over, Score: {score - 5}");
+            SetCursorPosition(WindowWidth / 5, WindowHeight / 2 + 1);
+            CursorVisible = true;
+            ReadKey();
         }
 
-        static int toEvenNumber(int value)
+        private static Pixel GetBerryPos(Pixel head, IReadOnlyCollection<Pixel> body)
         {
-            return value % 2 == 0 ? value : value - value % 2;
-        }
-
-        static Direction ReadMovement (Direction movement)
-        {
-            if (KeyAvailable)
+            Pixel berry;
+            do
             {
-                var key = ReadKey(true).Key;
-                if (key == ConsoleKey.UpArrow && movement != Direction.Down)
-                {
+                berry = new Pixel(ToEvenNumber(Rand.Next(1, WindowWidth - 2)), Rand.Next(1, WindowHeight - 2), ConsoleColor.Cyan);
+            } while ((berry.XPos == head.XPos && berry.YPos == head.YPos) || body.Any(b => berry.XPos == b.XPos && berry.YPos == b.YPos));
+
+            return berry;
+        }
+
+        private static int ToEvenNumber(int value)
+        {
+            return value % 2 == 0 ? value : value + 1;
+        }
+
+        private static (Direction Direction, bool KeyPressed) ReadMovement(Direction movement)
+        {
+            if (!KeyAvailable)
+            {
+                return (movement, false);
+            }
+
+            var key = ReadKey(true).Key;
+
+            switch (key)
+            {
+                case ConsoleKey.UpArrow when movement != Direction.Down:
                     movement = Direction.Up;
-                }
-                else if (key == ConsoleKey.DownArrow && movement != Direction.Up)
-                {
+                    break;
+                case ConsoleKey.DownArrow when movement != Direction.Up:
                     movement = Direction.Down;
-                }
-                else if (key == ConsoleKey.LeftArrow && movement != Direction.Right)
-                {
+                    break;
+                case ConsoleKey.LeftArrow when movement != Direction.Right:
                     movement = Direction.Left;
-                }
-                else if (key == ConsoleKey.RightArrow && movement != Direction.Left)
-                {
+                    break;
+                case ConsoleKey.RightArrow when movement != Direction.Left:
                     movement = Direction.Right;
-                }
+                    break;
+                case ConsoleKey.Escape:
+                    movement = Direction.Quit;
+                    break;
             }
-
-            return movement;
+            return (movement, true);
         }
 
-        static void DrawPixel (Pixel pixel)
+        private static void DrawPixel(Pixel pixel)
         {
-            SetCursorPosition (pixel.XPos, pixel.YPos);
+            SetCursorPosition(pixel.XPos, pixel.YPos);
             ForegroundColor = pixel.ScreenColor;
-            Write ("■");
+            Write("■");
             SetCursorPosition(0, 0);
         }
 
 
-        static void RemovePixel (Pixel pixel)
+        private static void RemovePixel(Pixel pixel)
         {
-            SetCursorPosition (pixel.XPos, pixel.YPos);
+            SetCursorPosition(pixel.XPos, pixel.YPos);
             ForegroundColor = ConsoleColor.Black;
-            Write ("■");
+            Write("■");
             SetCursorPosition(0, 0);
         }
-        static void DrawBorder ()
-        {
-            for (int i = 0; i < WindowWidth; i += 2)
-            {
-                SetCursorPosition (i, 0);
-                Write ("■");
 
-                SetCursorPosition (i, WindowHeight - 1);
-                Write ("■");
+        private static void DrawBorder()
+        {
+            for (var i = 0; i < WindowWidth; i += 2)
+            {
+                SetCursorPosition(i, 0);
+                Write("■");
+
+                SetCursorPosition(i, WindowHeight - 1);
+                Write("■");
             }
 
-            for (int i = 0; i < WindowHeight; i++)
+            for (var i = 0; i < WindowHeight; i++)
             {
-                SetCursorPosition (0, i);
-                Write ("■");
+                SetCursorPosition(0, i);
+                Write("■");
 
-                SetCursorPosition (WindowWidth - 2, i);
-                Write ("■");
+                SetCursorPosition(WindowWidth - 2, i);
+                Write("■");
             }
         }
 
-        struct Pixel
+        private struct Pixel
         {
-            public Pixel (int xPos, int yPos, ConsoleColor color)
+            public Pixel(int xPos, int yPos, ConsoleColor color)
             {
                 XPos = xPos;
                 YPos = yPos;
@@ -162,15 +195,16 @@ namespace Snake
             }
             public int XPos { get; set; }
             public int YPos { get; set; }
-            public ConsoleColor ScreenColor { get; set; }
+            public ConsoleColor ScreenColor { get; }
         }
 
-        enum Direction
+        private enum Direction
         {
             Up,
             Down,
             Right,
-            Left
+            Left,
+            Quit
         }
     }
 }
