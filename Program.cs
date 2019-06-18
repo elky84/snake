@@ -12,6 +12,8 @@ namespace Snake
 
         public static void Main()
         {
+			Console.Clear();
+			
             var score = 5;
 
             var head = new Pixel(WindowWidth / 2, WindowHeight / 2, ConsoleColor.Red);
